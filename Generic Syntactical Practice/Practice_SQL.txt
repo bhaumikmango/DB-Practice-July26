@@ -1,0 +1,115 @@
+CREATE TABLE customers (
+  id SERIAL PRIMARY KEY,
+  first_name VARCHAR(50),
+  last_name VARCHAR(50),
+  email VARCHAR(100),
+  city VARCHAR(50),
+  country VARCHAR(50),
+  signup_date DATE
+);
+
+CREATE TABLE products (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(100),
+  category VARCHAR(50),
+  price NUMERIC(10,2),
+  stock_quantity INT
+);
+
+CREATE TABLE orders (
+  id SERIAL PRIMARY KEY,
+  customer_id INT REFERENCES customers(id),
+  product_id INT REFERENCES products(id),
+  quantity INT,
+  order_date TIMESTAMP DEFAULT NOW(),
+  status VARCHAR(20)
+);
+
+
+\i /home/bhaumik/Downloads/customers.sql
+
+
+\i /home/bhaumik/Downloads/payments.sql
+
+
+\copy orders(customer_id, product_id, quantity, order_date, status) FROM /home/bhaumik/Downloads/orders.csv DELIMITER ',' CSV HEADER;^C
+
+
+CREATE TABLE payments(
+id SERIAL PRIMARY KEY,
+order_id INT REFERENCES orders(id),
+payment_method VARCHAR(20), 
+refund VARCHAR(15));
+
+
+\i /home/bhaumik/Downloads/payments.sql
+
+
+SELECT * FROM customers 
+JOIN orders ON customers.id = orders.customer_id
+JOIN payments ON orders.id = payments.order_id
+WHERE payments.refund = 'NA' 
+ORDER BY orders.order_date ASC;
+
+
+SELECT * FROM customers 
+WHERE customers.country ='Nepal'
+ORDER BY customers.signup_date DESC;
+
+
+SELECT DISTINCT(country) FROM customers;
+
+
+SELECT name FROM products WHERE products.price BETWEEN 20 AND 100;
+Alternatively 
+SELECT name FROM products WHERE products.price < 100 AND products.price > 20;
+
+
+SELECT * FROM customers WHERE customers.email LIKE '%@gmail.com';
+Case Insensitive Alternative
+SELECT * FROM customers WHERE customers.email ILIKE '%@gmail.com';
+
+
+SELECT * FROM orders WHERE orders.status IN ('pending', 'shipped', 'cancelled');
+
+
+SELECT * FROM orders ORDER BY order_date DESC LIMIT 10;
+FETCH Alternative
+SELECT * FROM orders ORDER BY order_date DESC ROWS FETCH FIRST 10 ROWS ONLY;
+
+SELECT * FROM orders ORDER BY order_date DESC LIMIT 10 OFFSET 10;
+
+The core difference is that LIMIT/OFFSET is a platform-specific dialect (used in MySQL and PostgreSQL), while FETCH is the official ANSI SQL standard. Mechanically, they execute the exact same way inside the database engine. The reason both paginate poorly at scale is due to how OFFSET works under the hood. The Problem: O(N) Sequential Scanning.
+
+
+On an unindexed column, both operators force a full table scan, checking every single row manually. Because the database must read all data from the disk anyway, the minor CPU overhead of ILIKE performing case-insensitive character comparisons is negligible. Both scale poorly.
+
+
+The WHERE clause operates strictly on raw rows before any grouping or aggregation takes place. It acts as an early row-level gatekeeper, discarding unmatched data so the database avoids wasting CPU and memory resources grouping irrelevant records. Aggregated groups are filtered later using HAVING.
+
+
+SELECT status, COUNT(*) as count_orders FROM orders GROUP BY status;
+
+
+SELECT p.category, SUM(p.price * o.quantity) FROM products as p JOIN orders as o ON p.id = o.product_id GROUP BY p.category;
+
+
+SELECT category, AVG(price) AS avg_price FROM products GROUP BY category HAVING AVG(price) > 50;
+
+
+SELECT MIN(quantity), MAX(quantity), AVG(quantity) FROM orders;
+
+
+SELECT c.id, SUM(p.price * o.quantity) AS total_spent
+FROM products AS p
+JOIN orders AS o ON p.id = o.product_id
+JOIN customers AS c ON c.id = o.customer_id
+GROUP BY c.id
+ORDER BY total_spent DESC
+LIMIT 5;
+
+
+SELECT ROUND((price*0.9), 2) AS discounted_price FROM products;
+
+
+
